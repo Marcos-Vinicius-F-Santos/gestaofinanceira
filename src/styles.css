@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-ink antialiased;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-base outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:text-sm;
+  }
+
+  label {
+    @apply mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200;
+  }
+
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-200;
+  }
+
+  .panel {
+    @apply rounded-lg border border-slate-200 bg-white shadow-soft;
+  }
+
+  .table-action {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-100 sm:h-10 sm:w-10;
+  }
+
+  .section-title {
+    @apply text-sm font-bold uppercase tracking-wide text-slate-500;
+  }
+}

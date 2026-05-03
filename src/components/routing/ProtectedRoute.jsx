@@ -4,7 +4,7 @@ import LoadingState from '../shared/LoadingState';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
-  const { isAuthenticated, loading, role } = useAuth();
+  const { isAuthenticated, loading, mustChangePassword, role } = useAuth();
 
   if (loading) {
     return <LoadingState fullScreen label="Verificando acesso..." />;
@@ -12,6 +12,10 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace state={{ from: location }} />;
   }
 
   if (allowedRoles?.length && !allowedRoles.includes(role)) {

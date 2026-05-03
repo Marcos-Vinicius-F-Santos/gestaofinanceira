@@ -11,14 +11,20 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
-import {
-  mockCreateDocument,
-  mockDeleteDocument,
-  mockListDocuments,
-  mockSubscribeToCollection,
-  mockUpdateDocument,
-} from './mockService';
+import { db } from './firebase';
+
+const USER_SCOPED_COLLECTIONS = new Set([
+  'produtos',
+  'fornecedores',
+  'contas',
+  'subcontas',
+  'movimentacoes',
+  'parcelas',
+  'lancamentos',
+  'contas_pagar',
+  'contas_receber',
+  'estoque',
+]);
 
 function normalizeSnapshot(snapshot) {
   return snapshot.docs.map((item) => ({
@@ -27,11 +33,13 @@ function normalizeSnapshot(snapshot) {
   }));
 }
 
-export async function listDocuments(collectionName, constraints = []) {
-  if (!isFirebaseConfigured) {
-    return mockListDocuments(collectionName, constraints);
+function assertUserIdOnCreate(collectionName, data) {
+  if (USER_SCOPED_COLLECTIONS.has(collectionName) && !data?.userId) {
+    throw new Error(`userId obrigatorio para criar documentos em ${collectionName}.`);
   }
+}
 
+export async function listDocuments(collectionName, constraints = []) {
   const ref = collection(db, collectionName);
   const q = query(ref, ...constraints);
   const snapshot = await getDocs(q);
@@ -39,25 +47,19 @@ export async function listDocuments(collectionName, constraints = []) {
 }
 
 export function subscribeToCollection(collectionName, constraints = [], onData, onError) {
-  if (!isFirebaseConfigured) {
-    return mockSubscribeToCollection(collectionName, constraints, onData, onError);
-  }
-
   const ref = collection(db, collectionName);
   const q = query(ref, ...constraints);
 
   return onSnapshot(
     q,
-    (snapshot) => onData(normalizeSnapshot(snapshot)),
+    (snapshot) => {
+      onData(normalizeSnapshot(snapshot));
+    },
     (error) => onError?.(error),
   );
 }
 
 export async function listRecentDocuments(collectionName, limitConstraint) {
-  if (!isFirebaseConfigured) {
-    return mockListDocuments(collectionName, limitConstraint);
-  }
-
   const ref = collection(db, collectionName);
   const constraints = limitConstraint
     ? [orderBy('createdAt', 'desc'), limitConstraint]
@@ -67,9 +69,7 @@ export async function listRecentDocuments(collectionName, limitConstraint) {
 }
 
 export async function createDocument(collectionName, data) {
-  if (!isFirebaseConfigured) {
-    return mockCreateDocument(collectionName, data);
-  }
+  assertUserIdOnCreate(collectionName, data);
 
   const ref = collection(db, collectionName);
   const payload = {
@@ -83,10 +83,6 @@ export async function createDocument(collectionName, data) {
 }
 
 export async function updateDocument(collectionName, id, data) {
-  if (!isFirebaseConfigured) {
-    return mockUpdateDocument(collectionName, id, data);
-  }
-
   const ref = doc(db, collectionName, id);
   return updateDoc(ref, {
     ...data,
@@ -95,10 +91,6 @@ export async function updateDocument(collectionName, id, data) {
 }
 
 export async function deleteDocument(collectionName, id) {
-  if (!isFirebaseConfigured) {
-    return mockDeleteDocument(collectionName, id);
-  }
-
   return deleteDoc(doc(db, collectionName, id));
 }
 

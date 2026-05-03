@@ -19,6 +19,14 @@ const initialFilters = {
   dataFinal: '',
 };
 
+function getContaName(parcela) {
+  return parcela.conta || parcela.contaNome || parcela.movement?.conta || parcela.movement?.contaNome || '';
+}
+
+function getSubcontaName(parcela) {
+  return parcela.subConta || parcela.subcontaNome || parcela.movement?.subConta || parcela.movement?.subcontaNome || '';
+}
+
 export default function ParcelasPage() {
   const scope = useDataScope();
   const [parcelas, setParcelas] = useState([]);
@@ -124,13 +132,15 @@ export default function ParcelasPage() {
         status: parcela.statusCalculado,
         fornecedor: parcela.movement?.fornecedorNome || '',
         produto: parcela.movement?.produtoNome || '',
+        conta: getContaName(parcela),
+        subConta: getSubcontaName(parcela),
         numeroParcela: parcela.numeroParcela,
         totalParcelas: parcela.totalParcelas,
         valorParcela: parcela.valorParcela,
         dataPagamento: parcela.dataPagamento || '',
         movimentacaoId: parcela.movimentacaoId,
       })),
-      ['dataVencimento', 'status', 'fornecedor', 'produto', 'numeroParcela', 'totalParcelas', 'valorParcela', 'dataPagamento', 'movimentacaoId'],
+      ['dataVencimento', 'status', 'fornecedor', 'produto', 'conta', 'subConta', 'numeroParcela', 'totalParcelas', 'valorParcela', 'dataPagamento', 'movimentacaoId'],
     );
   };
 
@@ -186,7 +196,7 @@ export default function ParcelasPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  {['Vencimento', 'Status', 'Fornecedor', 'Produto', 'Parcela', 'Valor', 'Movimentacao', 'Acoes'].map((label) => (
+                  {['Vencimento', 'Status', 'Fornecedor', 'Produto', 'Conta', 'Subconta', 'Parcela', 'Valor', 'Movimentacao', 'Acoes'].map((label) => (
                     <th key={label} className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                       {label}
                     </th>
@@ -200,6 +210,8 @@ export default function ParcelasPage() {
                     <td className="whitespace-nowrap px-4 py-3.5"><StatusBadge value={parcela.statusCalculado} /></td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{parcela.movement?.fornecedorNome || '-'}</td>
                     <td className="min-w-52 px-4 py-3.5 text-sm text-slate-600">{parcela.movement?.produtoNome || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getContaName(parcela) || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getSubcontaName(parcela) || '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{parcela.numeroParcela}/{parcela.totalParcelas}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{formatCurrency(parcela.valorParcela)}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-slate-500">{parcela.movimentacaoId}</td>

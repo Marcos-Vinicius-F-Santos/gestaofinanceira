@@ -1,6 +1,6 @@
 import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
-import { byField, createDocument, listDocuments, updateDocument } from './firestoreService';
+import { db } from './firebase';
+import { byField, listDocuments } from './firestoreService';
 import { requireOwnerId, filterByScope, getTargetUserId } from './accessScope';
 import { getFornecedorById } from './fornecedorService';
 import { getEstoqueAtual, getProdutoByCodigo, getProdutoById, normalizeProduto } from './produtoService';
@@ -89,8 +89,8 @@ function sanitizeMovimentacao(payload, product, supplier, ownerId) {
   const primeiroVencimento = payload.primeiroVencimento || dataReferencia;
   const contaId = normalizeText(payload.contaId);
   const subContaId = normalizeText(payload.subContaId || payload.subcontaId);
-  const conta = normalizeText(payload.conta);
-  const subConta = normalizeText(payload.subConta || payload.subconta);
+  const conta = normalizeText(payload.conta || payload.contaNome);
+  const subConta = normalizeText(payload.subConta || payload.subconta || payload.subcontaNome);
 
   if (!VALID_TYPES.includes(tipo)) {
     throw new Error('Tipo de movimentacao invalido.');
@@ -138,8 +138,10 @@ function sanitizeMovimentacao(payload, product, supplier, ownerId) {
     fazenda: normalizeText(payload.fazenda),
     contaId,
     conta,
+    contaNome: conta,
     subContaId,
     subConta,
+    subcontaNome: subConta,
     descricao: normalizeText(payload.descricao),
     quantidade,
     valorTotal,
@@ -169,8 +171,10 @@ function buildParcelas(movement, movementId) {
     fornecedorNome: movement.fornecedorNome,
     contaId: movement.contaId,
     conta: movement.conta,
+    contaNome: movement.contaNome || movement.conta,
     subContaId: movement.subContaId,
     subConta: movement.subConta,
+    subcontaNome: movement.subcontaNome || movement.subConta,
     numeroParcela: index + 1,
     totalParcelas: movement.parcelas,
     valorParcela,
@@ -200,18 +204,6 @@ export async function createMovimentacao(payload, scope = {}) {
     saldoAnterior,
     saldoPosterior,
   };
-
-  if (!isFirebaseConfigured) {
-    if (direction !== 0) {
-      await updateDocument('produtos', product.id, { estoqueAtual: saldoPosterior, quantidadeAtual: saldoPosterior });
-    }
-
-    const movementId = await createDocument(COLLECTION, movementPayload);
-    const parcelas = buildParcelas(movementPayload, movementId);
-
-    await Promise.all(parcelas.map((parcela) => createDocument(PARCELAS_COLLECTION, parcela)));
-    return movementId;
-  }
 
   const batch = writeBatch(db);
   const now = serverTimestamp();

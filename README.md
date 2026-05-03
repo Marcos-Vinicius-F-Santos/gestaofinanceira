@@ -10,7 +10,7 @@ Sistema web de gestao economica, financeira e operacional para pequenos clientes
 - React Router
 - Firebase Authentication
 - Cloud Firestore
-- Firebase Functions preparada para criacao segura de clientes pelo admin
+- Firebase Functions para criacao segura de clientes e recuperacao de senha por codigo
 - Vercel para deploy
 
 ## Principais recursos
@@ -26,7 +26,7 @@ Sistema web de gestao economica, financeira e operacional para pequenos clientes
 - Status automatico por vencimento
 - Historico de movimentacoes e historico de precos por produto
 - Exportacao CSV
-- Modo demo local sem Firebase configurado
+- Recuperacao de senha com codigo enviado por email via Cloud Function
 
 ## Estrutura
 
@@ -57,22 +57,46 @@ npm run dev
 
 Abra o endereco exibido pelo Vite, normalmente `http://127.0.0.1:5173` ou `http://localhost:5173`.
 
-## Modo demo
+## Configuracao Firebase
 
-Se as variaveis `VITE_FIREBASE_*` nao estiverem preenchidas, o app usa `localStorage` para permitir testes sem Firebase.
+O Firebase e inicializado em [src/services/firebase.js](src/services/firebase.js) usando apenas variaveis de ambiente do Vite. Nao mantenha configuracao hardcoded no codigo.
 
-- Admin: `admin@teste.com` / `123456`
-- Cliente: `cliente@teste.com` / `123456`
+Crie ou edite `.env.local` na raiz do projeto:
 
-## Configurar Firebase
+```env
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
+```
 
-1. Copie `.env.example` para `.env.local`.
-2. Preencha as variaveis `VITE_FIREBASE_*`.
-3. Ative Authentication com email/senha.
-4. Crie o Firestore.
-5. Publique as regras em `firestore.rules`.
+Depois:
+
+1. Preencha as variaveis `VITE_FIREBASE_*` com os dados do app web do Firebase.
+2. Ative Authentication com email/senha.
+3. Crie o Firestore.
+4. Publique as regras em `firestore.rules`.
+5. Publique as Functions para criacao de cliente e recuperacao de senha.
+
+Se alguma variavel estiver ausente, o app mostra no console:
+
+```txt
+Firebase nao configurado corretamente
+```
+
+Nesse caso, a aplicacao nao inicializa. O sistema depende de Firebase real.
+
+Na Vercel, cadastre as mesmas variaveis em Project Settings > Environment Variables antes do deploy.
 
 Guia completo: [docs/firebase-setup.md](docs/firebase-setup.md).
+
+## Recuperacao de senha
+
+O frontend chama as callables `requestPasswordResetCode` e `verifyPasswordResetCode`.
+O codigo de 6 digitos e gerado, hasheado, armazenado temporariamente e enviado por email apenas no backend.
 
 ## Deploy na Vercel
 

@@ -1,5 +1,7 @@
+import { serverTimestamp } from 'firebase/firestore';
 import { byField, listDocuments, updateDocument } from './firestoreService';
 import { filterByScope, getTargetUserId } from './accessScope';
+import { auth } from './firebase';
 
 const COLLECTION = 'parcelas';
 
@@ -11,21 +13,43 @@ function isOverdue(dateValue) {
   return Boolean(dateValue && dateValue < todayIso());
 }
 
-export function getStatusContaPagar(parcela) {
-  if (parcela.status === 'paga' || parcela.dataPagamento) return 'pago';
+function auditTimestamp() {
+  return serverTimestamp();
+}
+
+function auditUserId(scope = {}) {
+  return scope.uid || auth?.currentUser?.uid || '';
+}
+
+export function calculatePayableStatus(parcela) {
+  if (parcela.dataPagamento) return 'pago';
   if (isOverdue(parcela.dataVencimento)) return 'vencido';
   return 'aberto';
 }
 
-export function getStatusContaReceber(parcela) {
-  if (parcela.status === 'recebido' || parcela.dataRecebimento) return 'recebido';
+export function calculateReceivableStatus(parcela) {
+  if (parcela.dataRecebimento) return 'recebido';
   if (isOverdue(parcela.dataVencimento)) return 'atrasado';
   return 'aberto';
 }
 
+export const getStatusContaPagar = calculatePayableStatus;
+export const getStatusContaReceber = calculateReceivableStatus;
+
 export function getParcelaStatus(parcela) {
-  if (parcela.tipo === 'receita') return getStatusContaReceber(parcela);
-  return getStatusContaPagar(parcela);
+  if (parcela.tipo === 'receita') return calculateReceivableStatus(parcela);
+  return calculatePayableStatus(parcela);
+}
+
+async function getParcelaById(id, scope = {}) {
+  const parcelas = await getParcelas(scope);
+  const parcela = parcelas.find((item) => item.id === id);
+
+  if (!parcela) {
+    throw new Error('Parcela nao encontrada.');
+  }
+
+  return parcela;
 }
 
 export async function getParcelas(scope = {}) {
@@ -48,12 +72,24 @@ export const getContasReceber = (scope = {}) => getParcelasByTipo('receita', sco
 
 export async function marcarParcelaPaga(id, dataPagamento = todayIso()) {
   return updateDocument(COLLECTION, id, {
-    status: 'paga',
+    status: 'pago',
     dataPagamento,
   });
 }
 
 export const marcarComoPago = marcarParcelaPaga;
+
+export async function desfazerPagamento(id, scope = {}) {
+  const parcela = await getParcelaById(id, scope);
+  const nextStatus = calculatePayableStatus({ ...parcela, dataPagamento: '' });
+
+  return updateDocument(COLLECTION, id, {
+    status: nextStatus,
+    dataPagamento: '',
+    baixaDesfeitaEm: auditTimestamp(),
+    baixaDesfeitaPor: auditUserId(scope),
+  });
+}
 
 export async function marcarParcelaRecebida(id, dataRecebimento = todayIso()) {
   return updateDocument(COLLECTION, id, {
@@ -63,6 +99,18 @@ export async function marcarParcelaRecebida(id, dataRecebimento = todayIso()) {
 }
 
 export const marcarComoRecebido = marcarParcelaRecebida;
+
+export async function desfazerRecebimento(id, scope = {}) {
+  const parcela = await getParcelaById(id, scope);
+  const nextStatus = calculateReceivableStatus({ ...parcela, dataRecebimento: '' });
+
+  return updateDocument(COLLECTION, id, {
+    status: nextStatus,
+    dataRecebimento: '',
+    baixaDesfeitaEm: auditTimestamp(),
+    baixaDesfeitaPor: auditUserId(scope),
+  });
+}
 
 export async function editarVencimentoParcela(id, dataVencimento) {
   if (!dataVencimento) {

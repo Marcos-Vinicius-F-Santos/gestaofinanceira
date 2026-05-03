@@ -1,6 +1,7 @@
 import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
-import { createDocument, listDocuments, updateDocument } from './firestoreService';
+import { db } from './firebase';
+import { byField, listDocuments } from './firestoreService';
+import { filterByScope, getTargetUserId, requireOwnerId } from './accessScope';
 import { getProdutoByCodigo, getQuantidadeAtual, normalizeCodigo, normalizeProduto } from './produtoService';
 
 function normalizeText(value) {
@@ -38,9 +39,11 @@ function validateMovimentacao(payload) {
   };
 }
 
-export async function createMovimentacao(payload) {
+export async function createMovimentacao(payload, scope = {}) {
+  const ownerId = requireOwnerId(scope);
+  const scoped = { ...scope, targetUserId: ownerId };
   const data = validateMovimentacao(payload);
-  const product = await getProdutoByCodigo(data.codigo);
+  const product = await getProdutoByCodigo(data.codigo, scoped);
 
   if (!product) {
     throw new Error('Produto nao encontrado. Cadastre o produto antes de movimentar.');
@@ -56,29 +59,8 @@ export async function createMovimentacao(payload) {
     throw new Error('Estoque insuficiente para registrar esta saida.');
   }
 
-  if (!isFirebaseConfigured) {
-    await updateDocument('estoque', normalizedProduct.id, {
-      quantidadeAtual: nextQuantity,
-      quantidade: nextQuantity,
-    });
-
-    await createDocument('movimentacoes', {
-      produtoId: normalizedProduct.id,
-      produtoCodigo: normalizedProduct.codigo,
-      produtoNome: normalizedProduct.nome,
-      tipo: data.tipo,
-      quantidade: data.quantidade,
-      data: data.data,
-      observacao: data.observacao,
-      saldoAnterior: currentQuantity,
-      saldoPosterior: nextQuantity,
-    });
-
-    return normalizedProduct.id;
-  }
-
   const batch = writeBatch(db);
-  const productRef = doc(db, 'estoque', normalizedProduct.id);
+  const productRef = doc(db, 'produtos', normalizedProduct.id);
   const movementRef = doc(collection(db, 'movimentacoes'));
   const now = serverTimestamp();
 
@@ -89,6 +71,7 @@ export async function createMovimentacao(payload) {
   });
 
   batch.set(movementRef, {
+    userId: ownerId,
     produtoId: normalizedProduct.id,
     produtoCodigo: normalizedProduct.codigo,
     produtoNome: normalizedProduct.nome,
@@ -106,19 +89,22 @@ export async function createMovimentacao(payload) {
   return normalizedProduct.id;
 }
 
-export async function getMovimentacoes() {
-  const movements = await listDocuments('movimentacoes');
+export async function getMovimentacoes(scope = {}) {
+  const targetUserId = getTargetUserId(scope);
+  const constraints = targetUserId ? [byField('userId', '==', targetUserId)] : [];
+  const movements = await listDocuments('movimentacoes', constraints);
 
-  return movements.sort((a, b) => String(b.data || b.createdAt || '').localeCompare(String(a.data || a.createdAt || '')));
+  return filterByScope(movements, scope)
+    .sort((a, b) => String(b.data || b.createdAt || '').localeCompare(String(a.data || a.createdAt || '')));
 }
 
-export async function getUltimaMovimentacao(produtoId = null) {
-  const movements = await getMovimentacoes();
+export async function getUltimaMovimentacao(produtoId = null, scope = {}) {
+  const movements = await getMovimentacoes(scope);
   return movements.find((movement) => !produtoId || movement.produtoId === produtoId) || null;
 }
 
-export async function getMovimentacoesByProduto(produtoId) {
-  const movements = await getMovimentacoes();
+export async function getMovimentacoesByProduto(produtoId, scope = {}) {
+  const movements = await getMovimentacoes(scope);
 
   return movements
     .filter((movement) => movement.produtoId === produtoId)

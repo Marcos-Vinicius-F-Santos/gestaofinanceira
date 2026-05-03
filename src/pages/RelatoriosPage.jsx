@@ -6,7 +6,9 @@ import FormField from '../components/shared/FormField';
 import LoadingState from '../components/shared/LoadingState';
 import PageHeader from '../components/shared/PageHeader';
 import StatusBadge from '../components/shared/StatusBadge';
+import { useDataScope } from '../hooks/useDataScope';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
+import { byField } from '../services/firestoreService';
 import { normalizeProduto } from '../services/produtoService';
 import { exportToCSV } from '../utils/csv';
 import { formatDate } from '../utils/formatters';
@@ -135,8 +137,13 @@ function MovementsReport({ movements }) {
 }
 
 export default function RelatoriosPage() {
-  const { items: productItems, loading: loadingProducts, error: productsError } = useFirestoreCollection('estoque');
-  const { items: movementItems, loading: loadingMovements, error: movementsError } = useFirestoreCollection('movimentacoes');
+  const scope = useDataScope();
+  const constraints = useMemo(
+    () => (scope.effectiveUserId ? [byField('userId', '==', scope.effectiveUserId)] : []),
+    [scope.effectiveUserId],
+  );
+  const { items: productItems, loading: loadingProducts, error: productsError } = useFirestoreCollection('produtos', constraints);
+  const { items: movementItems, loading: loadingMovements, error: movementsError } = useFirestoreCollection('movimentacoes', constraints);
   const [activeTab, setActiveTab] = useState('produtos');
   const [filters, setFilters] = useState(movementFiltersInitial);
   const products = useMemo(

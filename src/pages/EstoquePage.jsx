@@ -5,18 +5,25 @@ import StockTable from '../components/stock/StockTable';
 import Alert from '../components/shared/Alert';
 import LoadingState from '../components/shared/LoadingState';
 import PageHeader from '../components/shared/PageHeader';
+import { useDataScope } from '../hooks/useDataScope';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
+import { byField } from '../services/firestoreService';
 import { normalizeProduto } from '../services/produtoService';
 import { createMovimentacao } from '../services/stockService';
 import { exportToCSV } from '../utils/csv';
 
 export default function EstoquePage() {
-  const { items, loading, error } = useFirestoreCollection('estoque');
+  const scope = useDataScope();
+  const constraints = useMemo(
+    () => (scope.effectiveUserId ? [byField('userId', '==', scope.effectiveUserId)] : []),
+    [scope.effectiveUserId],
+  );
+  const { items, loading, error } = useFirestoreCollection('produtos', constraints);
   const {
     items: movements,
     loading: movementsLoading,
     error: movementsError,
-  } = useFirestoreCollection('movimentacoes');
+  } = useFirestoreCollection('movimentacoes', constraints);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [actionError, setActionError] = useState('');
@@ -35,7 +42,7 @@ export default function EstoquePage() {
     setActionError('');
 
     try {
-      await createMovimentacao(payload);
+      await createMovimentacao(payload, scope);
       setFeedback('Movimentacao registrada.');
     } catch (err) {
       setActionError(err.message || 'Nao foi possivel atualizar o estoque.');

@@ -18,6 +18,7 @@ export default [
       },
       globals: {
         Blob: 'readonly',
+        console: 'readonly',
         URL: 'readonly',
         document: 'readonly',
         importMeta: 'readonly',

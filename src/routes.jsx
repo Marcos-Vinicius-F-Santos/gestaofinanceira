@@ -3,8 +3,10 @@ import AppLayout from './components/layout/AppLayout';
 import HomeRedirect from './components/routing/HomeRedirect';
 import ProtectedRoute from './components/routing/ProtectedRoute';
 import AdminPage from './pages/AdminPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import ContasPagarPage from './pages/ContasPagarPage';
 import ContasReceberPage from './pages/ContasReceberPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import FornecedoresPage from './pages/FornecedoresPage';
 import HistoricoPage from './pages/HistoricoPage';
 import HistoricoPrecosPage from './pages/HistoricoPrecosPage';
@@ -16,6 +18,8 @@ import ProdutosPage from './pages/ProdutosPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/change-password', element: <ProtectedRoute><ChangePasswordPage /></ProtectedRoute> },
   {
     path: '/',
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,

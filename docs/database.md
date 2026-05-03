@@ -1,6 +1,6 @@
 # Banco de Dados
 
-Este documento descreve as collections usadas no Cloud Firestore. Campos `createdAt` e `updatedAt` usam `serverTimestamp()` no Firebase e ISO string no modo demo.
+Este documento descreve as collections usadas no Cloud Firestore. Campos `createdAt` e `updatedAt` usam `serverTimestamp()`.
 
 ## Padrao de seguranca
 
@@ -8,6 +8,7 @@ Este documento descreve as collections usadas no Cloud Firestore. Campos `create
 - Cliente (`role = client`) so pode ler e escrever documentos onde `userId == request.auth.uid`.
 - Admin (`role = admin`) pode ler e escrever dados de clientes.
 - Usuario com `status = pending` ou `blocked` nao acessa o sistema como cliente.
+- `passwordResetCodes` e acessada apenas por Cloud Functions com Admin SDK.
 
 ## users
 
@@ -22,21 +23,61 @@ Campos:
 | `email` | string | sim | Email de login |
 | `role` | string | sim | `admin` ou `client` |
 | `status` | string | sim | `pending`, `active` ou `blocked` |
+| `mustChangePassword` | boolean | sim | Obriga trocar senha temporaria no login |
 | `createdByAdminId` | string | nao | Admin que criou o cliente |
 | `observacoesInternas` | string | nao | Notas internas do admin |
 | `createdAt` | timestamp | sim | Criacao |
 | `updatedAt` | timestamp | sim | Ultima alteracao |
+| `firstLoginAt` | timestamp | nao | Primeiro login concluido |
 | `lastLoginAt` | timestamp | nao | Ultimo acesso |
+| `passwordChangedAt` | timestamp | nao | Ultima troca de senha |
 
 Regras:
 
 - Apenas admin cria, libera ou bloqueia clientes.
+- Admin cria cliente com senha temporaria e `mustChangePassword = true`.
 - Cliente ativo pode acessar o sistema.
 - Cliente pendente ou bloqueado e deslogado apos login.
+- Cliente com `mustChangePassword = true` so acessa `/change-password`.
+- A senha nunca deve ser salva no Firestore.
 
 Relacionamentos:
 
 - `users.uid` e usado como `userId` nas demais collections.
+
+## passwordResetCodes
+
+Armazena codigos temporarios de recuperacao de senha. A collection e operacional e nao deve ser acessada diretamente pelo frontend.
+
+Campos:
+
+| Campo | Tipo | Obrigatorio | Descricao |
+| --- | --- | --- | --- |
+| `id` | string | sim | ID hashado derivado do email normalizado |
+| `email` | string | sim | Email normalizado |
+| `codeHash` | string | sim | Hash HMAC do codigo de 6 digitos |
+| `expiresAt` | timestamp | sim | Expiracao em 10 minutos |
+| `expiresAtMillis` | number | sim | Expiracao em milissegundos para validacao |
+| `used` | boolean | sim | Indica se o codigo ja foi usado |
+| `attempts` | number | sim | Tentativas de validacao |
+| `createdAt` | timestamp | sim | Criacao |
+| `createdAtMillis` | number | sim | Criacao em milissegundos para bloqueio de reenvio |
+| `usedAt` | timestamp | nao | Momento de uso |
+| `updatedAt` | timestamp | nao | Ultima alteracao |
+
+Regras:
+
+- codigo puro nunca deve ser salvo.
+- codigo expira em 10 minutos.
+- limite de 5 tentativas.
+- reenvio e bloqueado por 60 segundos no backend e no frontend.
+- documento e marcado como `used = true` apos sucesso.
+- Firestore rules bloqueiam leitura/escrita pelo app cliente.
+
+Relacionamentos:
+
+- O email e usado para localizar o usuario no Firebase Auth via Admin SDK.
+- Apos sucesso, `users/{uid}` recebe `mustChangePassword = false` e `passwordChangedAt`.
 
 ## produtos
 
@@ -52,6 +93,10 @@ Campos:
 | `categoria` | string | nao | Categoria livre |
 | `subcategoria` | string | nao | Subcategoria livre |
 | `unidadeMedida` | string | nao | Unidade, ex: kg, sc, un |
+| `contaPadraoId` | string | nao | Conta sugerida ao lancar este produto |
+| `contaPadraoNome` | string | nao | Nome da conta padrao |
+| `subcontaPadraoId` | string | nao | Subconta sugerida ao lancar este produto |
+| `subcontaPadraoNome` | string | nao | Nome da subconta padrao |
 | `controlaEstoque` | boolean | sim | Define se altera estoque |
 | `estoqueAtual` | number | sim | Saldo atual |
 | `quantidadeAtual` | number | nao | Campo legado equivalente ao saldo |
@@ -63,6 +108,9 @@ Regras:
 
 - `codigo` nao pode duplicar para o mesmo `userId`.
 - `nome` e obrigatorio.
+- Conta padrao e opcional.
+- Se subconta padrao for informada, a conta padrao tambem deve existir.
+- Subconta padrao deve pertencer a conta padrao e ao mesmo `userId`.
 - Saida de estoque nao pode deixar `estoqueAtual` negativo.
 
 Relacionamentos:

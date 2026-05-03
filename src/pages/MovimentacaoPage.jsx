@@ -125,18 +125,54 @@ export default function MovimentacaoPage() {
   }, [form.controlaEstoque, form.movimentacaoEstoque, form.quantidade, selectedProduct]);
 
   useEffect(() => {
-    if (selectedProduct) {
-      setForm((prev) => ({ ...prev, controlaEstoque: selectedProduct.controlaEstoque }));
+    if (!selectedProduct) {
+      setForm((prev) => ({
+        ...prev,
+        controlaEstoque: false,
+        contaId: '',
+        conta: '',
+        subContaId: '',
+        subConta: '',
+      }));
+      return;
     }
-  }, [selectedProduct]);
+
+    const contaPadrao = selectedProduct.contaPadraoId
+      ? contas.find((conta) => conta.id === selectedProduct.contaPadraoId)
+      : null;
+    const subcontaPadrao = contaPadrao && selectedProduct.subcontaPadraoId
+      ? subcontas.find((subconta) => subconta.id === selectedProduct.subcontaPadraoId && subconta.contaId === contaPadrao.id)
+      : null;
+
+    setForm((prev) => ({
+      ...prev,
+      controlaEstoque: selectedProduct.controlaEstoque,
+      ...(contaPadrao
+        ? {
+            tipo: contaPadrao.tipo,
+            contaId: contaPadrao.id,
+            conta: contaPadrao.nome,
+            subContaId: subcontaPadrao?.id || '',
+            subConta: subcontaPadrao?.nome || '',
+          }
+        : {
+            contaId: '',
+            conta: '',
+            subContaId: '',
+            subConta: '',
+          }),
+    }));
+  }, [contas, selectedProduct, subcontas]);
 
   useEffect(() => {
     setForm((prev) => {
-      const contaAtualValida = contasDoTipo.some((conta) => conta.id === prev.contaId);
+      if (!prev.contaId) return prev;
+      const contaAtual = contas.find((conta) => conta.id === prev.contaId);
+      const contaAtualValida = contaAtual?.tipo === prev.tipo;
       if (contaAtualValida) return prev;
       return { ...prev, contaId: '', conta: '', subContaId: '', subConta: '' };
     });
-  }, [contasDoTipo]);
+  }, [contas, form.tipo]);
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
   const updateConta = (contaId) => {
@@ -167,8 +203,10 @@ export default function MovimentacaoPage() {
           possuiParcelamento: Number(form.numeroParcelas || 1) > 1,
           contaId: selectedConta?.id,
           conta: selectedConta?.nome,
+          contaNome: selectedConta?.nome,
           subContaId: selectedSubconta?.id,
           subConta: selectedSubconta?.nome,
+          subcontaNome: selectedSubconta?.nome,
         },
         scope,
       );

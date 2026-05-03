@@ -1,5 +1,5 @@
 import { getProdutos, getQuantidadeAtual } from './produtoService';
-import { getMovimentacoes } from './stockService';
+import { getMovimentacoes } from './movimentacaoService';
 
 function isLowStock(product) {
   if (product.estoqueMinimo === '' || product.estoqueMinimo === undefined || product.estoqueMinimo === null) {
@@ -9,8 +9,8 @@ function isLowStock(product) {
   return getQuantidadeAtual(product) <= Number(product.estoqueMinimo);
 }
 
-export async function getProdutosReport() {
-  const products = await getProdutos();
+export async function getProdutosReport(scope = {}) {
+  const products = await getProdutos(scope);
 
   return products.map((product) => ({
     id: product.id,
@@ -24,8 +24,8 @@ export async function getProdutosReport() {
   }));
 }
 
-export async function getMovimentacoesReport(filters = {}) {
-  const movements = await getMovimentacoes();
+export async function getMovimentacoesReport(filters = {}, scope = {}) {
+  const movements = await getMovimentacoes(scope);
 
   return movements.filter((movement) => {
     const matchesCodigo = !filters.codigo || movement.produtoCodigo?.toLowerCase().includes(filters.codigo.toLowerCase());

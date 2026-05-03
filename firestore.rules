@@ -24,6 +24,28 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function isActiveOwnUser(userId) {
+      return isOwnUser(userId) && userProfile().status == 'active';
+    }
+
+    function keepsUserIdentity() {
+      return request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status;
+    }
+
+    function updatesLoginMetadataOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLoginAt', 'updatedAt'])
+        && keepsUserIdentity();
+    }
+
+    function updatesPasswordMetadataOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword', 'passwordChangedAt', 'firstLoginAt', 'updatedAt'])
+        && request.resource.data.mustChangePassword == false
+        && keepsUserIdentity();
+    }
+
     function ownsExistingResource() {
       return isActiveClient() && resource.data.userId == request.auth.uid;
     }
@@ -42,10 +64,16 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.role in ['admin', 'client']
         && request.resource.data.status in ['pending', 'active', 'blocked'];
-      allow update: if isAdmin()
+      allow update: if (
+        isAdmin()
         && request.resource.data.role in ['admin', 'client']
-        && request.resource.data.status in ['pending', 'active', 'blocked'];
+        && request.resource.data.status in ['pending', 'active', 'blocked']
+      ) || (isActiveOwnUser(userId) && (updatesLoginMetadataOnly() || updatesPasswordMetadataOnly()));
       allow delete: if isAdmin();
+    }
+
+    match /passwordResetCodes/{documentId} {
+      allow read, write: if false;
     }
 
     match /produtos/{documentId} {

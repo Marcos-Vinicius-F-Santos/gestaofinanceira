@@ -18,6 +18,7 @@ Principais funcionalidades:
 - historico de movimentacoes
 - historico de preco por produto
 - exportacao CSV
+- recuperacao de senha por codigo enviado por email
 
 ## Estrutura do sistema
 
@@ -35,12 +36,12 @@ Principais funcionalidades:
 
 - Firebase Authentication para login
 - Cloud Firestore para persistencia
-- Firebase Functions preparada para criacao segura de usuarios clientes
+- Firebase Functions para criacao segura de usuarios clientes e recuperacao de senha
 - Regras Firestore para isolamento por `userId` e permissao de admin
 
 ### Autenticacao
 
-O login usa Firebase Auth quando as variaveis de ambiente estao configuradas. Sem Firebase, o app entra em modo demo com dados em `localStorage`.
+O login usa Firebase Auth. Sem as variaveis `VITE_FIREBASE_*` configuradas, a aplicacao nao inicializa e exibe erro claro no console.
 
 Fluxo:
 
@@ -50,6 +51,34 @@ Fluxo:
 4. Se `role = admin`, libera area administrativa.
 5. Se `role = client` e `status = active`, libera area do cliente.
 6. Se `status = pending` ou `blocked`, bloqueia acesso.
+7. Se `mustChangePassword = true`, redireciona obrigatoriamente para `/change-password`.
+
+Recuperacao de senha:
+
+1. Usuario clica em "Esqueci minha senha".
+2. App chama a callable `requestPasswordResetCode(email)`.
+3. A Cloud Function gera um codigo numerico de 6 digitos, salva apenas o hash em `passwordResetCodes` e envia o codigo por email.
+4. Usuario informa codigo, nova senha e confirmacao.
+5. App chama `verifyPasswordResetCode(email, code, newPassword)`.
+6. A Cloud Function valida expiracao, tentativas e hash antes de alterar a senha via Firebase Admin SDK.
+7. Apos sucesso, `mustChangePassword = false` e `passwordChangedAt` e atualizado em `users/{uid}`.
+
+Regras:
+
+- a tela nunca revela se o email existe
+- codigo expira em 10 minutos
+- limite de 5 tentativas
+- codigo puro nao e salvo no Firestore
+- senha nao e alterada pelo frontend
+
+Troca obrigatoria de senha:
+
+- Admin cria cliente com senha temporaria.
+- O documento `users/{uid}` recebe `mustChangePassword = true`.
+- No primeiro login ativo, o cliente fica bloqueado nas demais rotas ate alterar a senha.
+- A tela `/change-password` reautentica com a senha atual e atualiza a senha via Firebase Auth.
+- A senha nunca e salva no Firestore.
+- Apos sucesso, `mustChangePassword` vira `false` e `passwordChangedAt` e preenchido.
 
 ### Banco de dados
 
@@ -62,6 +91,7 @@ O Firestore armazena as collections:
 - `parcelas`
 - `contas`
 - `subcontas`
+- `passwordResetCodes`
 
 Todos os documentos operacionais possuem `userId`, exceto o proprio documento de usuario em `users`.
 
@@ -78,6 +108,10 @@ Principais campos:
 - `categoria`
 - `subcategoria`
 - `unidadeMedida`
+- `contaPadraoId`
+- `contaPadraoNome`
+- `subcontaPadraoId`
+- `subcontaPadraoNome`
 - `controlaEstoque`
 - `estoqueAtual`
 - `ativo`
@@ -87,6 +121,8 @@ Regras:
 - `codigo` e obrigatorio
 - `nome` e obrigatorio
 - `codigo` deve ser unico por `userId`
+- conta e subconta padrao sao opcionais e servem como sugestao no lancamento
+- subconta padrao deve pertencer a conta padrao
 - cliente acessa apenas seus produtos
 - admin pode operar produtos do cliente selecionado
 
@@ -281,6 +317,7 @@ Funcionalidades:
 
 - listar clientes
 - criar cliente
+- criar cliente com senha temporaria
 - editar status do cliente
 - liberar acesso
 - bloquear acesso
@@ -293,3 +330,24 @@ Regras:
 - admin pode ler e escrever dados de qualquer cliente
 - cliente comum nunca ve dados de outro cliente
 - admin em visao de cliente usa `effectiveUserId = selectedClientId`
+- clientes criados pelo admin devem trocar a senha temporaria no primeiro acesso
+
+### Recuperacao de senha
+
+Permite redefinir a senha quando o usuario esquece o acesso.
+
+Campos temporarios em `passwordResetCodes`:
+
+- `email`
+- `codeHash`
+- `expiresAt`
+- `used`
+- `attempts`
+- `createdAt`
+
+Regras:
+
+- collection nao e lida nem escrita diretamente pelo frontend
+- Cloud Functions usam Firebase Admin SDK
+- credenciais SMTP ficam somente no ambiente das Functions
+- resposta da solicitacao e generica para nao revelar cadastro de email

@@ -1,6 +1,7 @@
 import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
-import { createDocument, deleteDocument, updateDocument } from './firestoreService';
+import { db } from './firebase';
+import { updateDocument } from './firestoreService';
+import { requireOwnerId } from './accessScope';
 import { getPayableStatus, getReceivableStatus } from '../utils/businessRules';
 
 const requiredFields = ['tipo', 'descricao', 'valor', 'data', 'clienteFornecedor', 'categoria'];
@@ -49,20 +50,11 @@ function sanitizeLancamento(payload) {
   };
 }
 
-export async function createLancamento(payload) {
+export async function createLancamento(payload, scope = {}) {
   validateLancamento(payload);
 
-  const data = sanitizeLancamento(payload);
-
-  if (!isFirebaseConfigured) {
-    const id = await createDocument('lancamentos', data);
-    const accountId = await createDocument(accountCollection(data.tipo), {
-      ...data,
-      lancamentoId: id,
-    });
-    await updateDocument('lancamentos', id, { relatedAccountId: accountId });
-    return id;
-  }
+  const ownerId = requireOwnerId(scope);
+  const data = { ...sanitizeLancamento(payload), userId: ownerId };
 
   const batch = writeBatch(db);
   const lancamentoRef = doc(collection(db, 'lancamentos'));
@@ -92,36 +84,6 @@ export async function updateLancamento(id, payload, previous) {
 
   const data = sanitizeLancamento(payload);
 
-  if (!isFirebaseConfigured) {
-    const sameAccountCollection = previous?.relatedAccountId && previous.tipo === data.tipo;
-
-    if (sameAccountCollection) {
-      await updateDocument('lancamentos', id, {
-        ...data,
-        relatedAccountId: previous.relatedAccountId,
-      });
-      await updateDocument(accountCollection(data.tipo), previous.relatedAccountId, {
-        ...data,
-        lancamentoId: id,
-      });
-      return;
-    }
-
-    if (previous?.relatedAccountId) {
-      await deleteDocument(accountCollection(previous.tipo), previous.relatedAccountId);
-    }
-
-    const accountId = await createDocument(accountCollection(data.tipo), {
-      ...data,
-      lancamentoId: id,
-    });
-    await updateDocument('lancamentos', id, {
-      ...data,
-      relatedAccountId: accountId,
-    });
-    return;
-  }
-
   const batch = writeBatch(db);
   const lancamentoRef = doc(db, 'lancamentos', id);
   const accountRef = previous?.relatedAccountId
@@ -133,6 +95,7 @@ export async function updateLancamento(id, payload, previous) {
       : doc(collection(db, accountCollection(data.tipo)));
   const updatedPayload = {
     ...data,
+    userId: previous?.userId,
     updatedAt: serverTimestamp(),
   };
 
@@ -159,16 +122,6 @@ export async function updateLancamento(id, payload, previous) {
 }
 
 export async function deleteLancamento(id, previous) {
-  if (!isFirebaseConfigured) {
-    await deleteDocument('lancamentos', id);
-
-    if (previous?.relatedAccountId) {
-      await deleteDocument(accountCollection(previous.tipo), previous.relatedAccountId);
-    }
-
-    return;
-  }
-
   const batch = writeBatch(db);
   batch.delete(doc(db, 'lancamentos', id));
 

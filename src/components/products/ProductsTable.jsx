@@ -14,7 +14,7 @@ export default function ProductsTable({ items, onEdit, onDelete }) {
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
-              {['Codigo', 'Produto', 'Categoria', 'Unidade', 'Estoque', 'Status', 'Atualizado', 'Acoes'].map((label) => (
+              {['Codigo', 'Produto', 'Categoria', 'Conta padrao', 'Subconta padrao', 'Unidade', 'Estoque', 'Status', 'Atualizado', 'Acoes'].map((label) => (
                 <th key={label} className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                   {label}
                 </th>
@@ -30,6 +30,8 @@ export default function ProductsTable({ items, onEdit, onDelete }) {
                   <p className="text-xs text-slate-500">{item.subcategoria || '-'}</p>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{item.categoria || '-'}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{item.contaPadraoNome || '-'}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{item.subcontaPadraoNome || '-'}</td>
                 <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{item.unidadeMedida || '-'}</td>
                 <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{item.controlaEstoque ? item.estoqueAtual : '-'}</td>
                 <td className="whitespace-nowrap px-4 py-3.5">

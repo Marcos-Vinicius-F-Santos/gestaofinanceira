@@ -208,6 +208,7 @@ export default function AdminPage({ initialView = 'clientes' }) {
               {!currentClient ? (
                 <FormField id="clientPassword" label="Senha temporaria">
                   <input id="clientPassword" type="password" value={clientForm.password} onChange={(event) => setClientForm({ ...clientForm, password: event.target.value })} required />
+                  <p className="mt-1.5 text-xs font-medium text-amber-700">O cliente devera alterar essa senha no primeiro acesso.</p>
                 </FormField>
               ) : null}
               <FormField id="clientStatus" label="Status">

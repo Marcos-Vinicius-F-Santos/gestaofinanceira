@@ -1,12 +1,14 @@
-import { CalendarDays, Check, Download, Eye } from 'lucide-react';
+import { CalendarDays, Check, Download, Eye, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDataScope } from '../../hooks/useDataScope';
 import { getMovimentacoes } from '../../services/movimentacaoService';
 import {
+  calculatePayableStatus,
+  calculateReceivableStatus,
+  desfazerPagamento,
+  desfazerRecebimento,
   editarVencimentoParcela,
   getParcelasByTipo,
-  getStatusContaPagar,
-  getStatusContaReceber,
   marcarParcelaPaga,
   marcarParcelaRecebida,
 } from '../../services/parcelaService';
@@ -28,6 +30,14 @@ const emptyFilters = {
   dataInicial: '',
   dataFinal: '',
 };
+
+function getContaName(row) {
+  return row.conta || row.contaNome || row.movement?.conta || row.movement?.contaNome || '';
+}
+
+function getSubcontaName(row) {
+  return row.subConta || row.subcontaNome || row.movement?.subConta || row.movement?.subcontaNome || '';
+}
 
 export default function FinancialAccountsPage({ mode }) {
   const isPayable = mode === 'pagar';
@@ -72,7 +82,7 @@ export default function FinancialAccountsPage({ mode }) {
   const rows = useMemo(
     () => parcelas.map((parcela) => {
       const movement = movementById[parcela.movimentacaoId];
-      const status = isPayable ? getStatusContaPagar(parcela) : getStatusContaReceber(parcela);
+      const status = isPayable ? calculatePayableStatus(parcela) : calculateReceivableStatus(parcela);
       return { ...parcela, movement, statusFinanceiro: status };
     }),
     [isPayable, movementById, parcelas],
@@ -81,8 +91,8 @@ export default function FinancialAccountsPage({ mode }) {
   const filteredRows = useMemo(
     () => rows.filter((row) => {
       const person = String(row.fornecedorNome || row.movement?.fornecedorNome || '').toLowerCase();
-      const conta = String(row.conta || row.movement?.conta || '').toLowerCase();
-      const subConta = String(row.subConta || row.movement?.subConta || '').toLowerCase();
+      const conta = String(getContaName(row)).toLowerCase();
+      const subConta = String(getSubcontaName(row)).toLowerCase();
       const matchesStatus = !filters.status || row.statusFinanceiro === filters.status;
       const matchesPerson = !filters.pessoa || person.includes(filters.pessoa.toLowerCase());
       const matchesConta = !filters.conta || conta.includes(filters.conta.toLowerCase());
@@ -114,6 +124,26 @@ export default function FinancialAccountsPage({ mode }) {
     }
   };
 
+  const undoSettlement = async (row) => {
+    if (!window.confirm('Tem certeza que deseja desfazer esta baixa?')) return;
+
+    setFeedback('');
+    setActionError('');
+
+    try {
+      if (isPayable) {
+        await desfazerPagamento(row.id, scope);
+        setFeedback('Pagamento desfeito. Status recalculado pelo vencimento.');
+      } else {
+        await desfazerRecebimento(row.id, scope);
+        setFeedback('Recebimento desfeito. Status recalculado pelo vencimento.');
+      }
+      await loadData();
+    } catch (err) {
+      setActionError(err.message || 'Nao foi possivel desfazer a baixa.');
+    }
+  };
+
   const editDueDate = async (row) => {
     const nextDate = window.prompt('Nova data de vencimento (AAAA-MM-DD):', row.dataVencimento || '');
     if (!nextDate) return;
@@ -136,8 +166,8 @@ export default function FinancialAccountsPage({ mode }) {
       filteredRows.map((row) => ({
         pessoa: row.fornecedorNome || row.movement?.fornecedorNome || '',
         produtoDescricao: row.produtoNome || row.movement?.produtoNome || row.movement?.descricao || '',
-        conta: row.conta || row.movement?.conta || '',
-        subConta: row.subConta || row.movement?.subConta || '',
+        conta: getContaName(row),
+        subConta: getSubcontaName(row),
         valor: row.valorParcela,
         vencimento: row.dataVencimento,
         status: row.statusFinanceiro,
@@ -214,17 +244,35 @@ export default function FinancialAccountsPage({ mode }) {
                   <tr key={row.id} className={`${index % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'} transition hover:bg-blue-50/60`}>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{row.fornecedorNome || row.movement?.fornecedorNome || '-'}</td>
                     <td className="min-w-56 px-4 py-3.5 text-sm text-slate-600">{row.produtoNome || row.movement?.produtoNome || row.movement?.descricao || '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{row.conta || row.movement?.conta || '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{row.subConta || row.movement?.subConta || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getContaName(row) || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getSubcontaName(row) || '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{formatCurrency(row.valorParcela)}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{formatDate(row.dataVencimento)}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{row.numeroParcela}/{row.totalParcelas}</td>
                     <td className="whitespace-nowrap px-4 py-3.5"><StatusBadge value={row.statusFinanceiro} /></td>
                     <td className="whitespace-nowrap px-4 py-3.5">
                       <div className="flex gap-2">
-                        <button type="button" className="table-action" onClick={() => settle(row)} disabled={['pago', 'recebido'].includes(row.statusFinanceiro)} aria-label={isPayable ? 'Marcar como pago' : 'Marcar como recebido'}>
-                          <Check className="h-4 w-4" />
-                        </button>
+                        {['pago', 'recebido'].includes(row.statusFinanceiro) ? (
+                          <button
+                            type="button"
+                            className="table-action text-amber-700 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800"
+                            onClick={() => undoSettlement(row)}
+                            aria-label={isPayable ? 'Desfazer pagamento' : 'Desfazer recebimento'}
+                            title={isPayable ? 'Desfazer pagamento' : 'Desfazer recebimento'}
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => settle(row)}
+                            aria-label={isPayable ? 'Marcar como pago' : 'Marcar como recebido'}
+                            title={isPayable ? 'Marcar como pago' : 'Marcar como recebido'}
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        )}
                         <button type="button" className="table-action" onClick={() => editDueDate(row)} aria-label="Editar vencimento">
                           <CalendarDays className="h-4 w-4" />
                         </button>
@@ -248,8 +296,8 @@ export default function FinancialAccountsPage({ mode }) {
               Produto: selectedMovement.produtoNome,
               Fornecedor: selectedMovement.fornecedorNome,
               Tipo: selectedMovement.tipo,
-              Conta: selectedMovement.conta,
-              Subconta: selectedMovement.subConta,
+              Conta: selectedMovement.conta || selectedMovement.contaNome,
+              Subconta: selectedMovement.subConta || selectedMovement.subcontaNome,
               Descricao: selectedMovement.descricao,
               Quantidade: selectedMovement.quantidade,
               'Valor total': formatCurrency(selectedMovement.valorTotal),

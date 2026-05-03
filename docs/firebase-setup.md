@@ -1,6 +1,6 @@
 # Configuracao Firebase
 
-Este guia mostra como configurar Firebase Authentication, Firestore e variaveis de ambiente para o Gestao Pro.
+Este guia mostra como configurar Firebase Authentication, Firestore, Cloud Functions, email transacional e variaveis de ambiente para o Gestao Pro.
 
 ## 1. Criar projeto Firebase
 
@@ -41,6 +41,8 @@ Resumo:
 - cliente autenticado e ativo so acessa documentos com `userId` igual ao proprio UID
 - admin acessa documentos de todos os clientes
 - cliente pendente ou bloqueado nao deve operar dados
+- cliente pode atualizar no proprio `users/{uid}` apenas metadados de login e troca de senha
+- `passwordResetCodes` nao permite acesso direto pelo frontend
 - nenhuma collection deve usar `allow read, write: if true`
 
 ## 5. Adicionar app web
@@ -94,10 +96,13 @@ Exemplo:
   "email": "admin@empresa.com",
   "role": "admin",
   "status": "active",
+  "mustChangePassword": false,
   "createdByAdminId": "",
   "createdAt": "serverTimestamp",
   "updatedAt": "serverTimestamp",
-  "lastLoginAt": null
+  "firstLoginAt": null,
+  "lastLoginAt": null,
+  "passwordChangedAt": null
 }
 ```
 
@@ -105,7 +110,116 @@ Exemplo:
 
 Para producao, o cadastro de clientes pelo admin deve criar usuario no Firebase Auth por backend/Cloud Function. O frontend ja esta preparado para chamar uma callable function `createClientUser()`.
 
-## 8. Collections esperadas
+A callable deve:
+
+- criar usuario no Firebase Auth com a senha temporaria
+- criar `users/{uid}`
+- salvar `role = client`
+- salvar `status` informado pelo admin
+- salvar `mustChangePassword = true`
+- nao salvar a senha temporaria no Firestore
+
+## 8. Troca obrigatoria de senha
+
+Quando `mustChangePassword = true`:
+
+1. Usuario faz login com a senha temporaria.
+2. App valida `status`.
+3. Se `status = active`, redireciona para `/change-password`.
+4. A tela reautentica usando `reauthenticateWithCredential()`.
+5. Atualiza senha com `updatePassword()`.
+6. Atualiza `users/{uid}`:
+   - `mustChangePassword = false`
+   - `passwordChangedAt = serverTimestamp()`
+   - `firstLoginAt = serverTimestamp()`, se ainda nao existir
+   - `updatedAt = serverTimestamp()`
+
+Clientes `pending` ou `blocked` nao conseguem chegar a tela de troca de senha.
+
+## 9. Recuperacao de senha por codigo
+
+O app possui a rota:
+
+```txt
+/forgot-password
+```
+
+Fluxo:
+
+1. Usuario informa email.
+2. Frontend chama `requestPasswordResetCode(email)`.
+3. Cloud Function busca o usuario pelo email usando Admin SDK.
+4. Se existir, gera codigo de 6 digitos.
+5. Salva apenas `codeHash` em `passwordResetCodes`.
+6. Define expiracao de 10 minutos e tentativas em zero.
+7. Envia o codigo por email.
+8. Usuario informa codigo, nova senha e confirmacao.
+9. Frontend chama `verifyPasswordResetCode(email, code, newPassword)`.
+10. Cloud Function valida codigo, expiracao e tentativas.
+11. Senha e alterada com `admin.auth().updateUser()`.
+12. Codigo e marcado como usado.
+
+Seguranca:
+
+- resposta da solicitacao e generica para nao revelar se o email existe.
+- codigo puro nao e salvo no banco.
+- limite de 5 tentativas.
+- reenvio bloqueado por 60 segundos.
+- senha nunca passa por Firestore.
+- credenciais de email ficam somente nas Cloud Functions.
+
+## 10. Configurar Cloud Functions
+
+Instale dependencias das Functions:
+
+```bash
+cd functions
+npm install
+```
+
+Copie o exemplo de ambiente:
+
+```bash
+cp .env.example .env
+```
+
+Preencha:
+
+```env
+EMAIL_HOST=
+EMAIL_PORT=587
+EMAIL_USER=
+EMAIL_PASS=
+EMAIL_FROM=
+EMAIL_SECURE=false
+PASSWORD_RESET_HASH_SECRET=
+FUNCTIONS_REGION=southamerica-east1
+```
+
+Variaveis:
+
+- `EMAIL_HOST`: servidor SMTP.
+- `EMAIL_PORT`: porta SMTP, normalmente `587` ou `465`.
+- `EMAIL_USER`: usuario SMTP.
+- `EMAIL_PASS`: senha SMTP.
+- `EMAIL_FROM`: remetente dos emails.
+- `EMAIL_SECURE`: `true` para SMTP seguro direto, comum na porta `465`.
+- `PASSWORD_RESET_HASH_SECRET`: segredo forte para HMAC do codigo.
+- `FUNCTIONS_REGION`: regiao das Functions.
+
+Publique:
+
+```bash
+firebase deploy --only functions,firestore:rules
+```
+
+Functions criadas:
+
+- `createClientUser`
+- `requestPasswordResetCode`
+- `verifyPasswordResetCode`
+
+## 11. Collections esperadas
 
 - `users`
 - `produtos`
@@ -114,10 +228,11 @@ Para producao, o cadastro de clientes pelo admin deve criar usuario no Firebase 
 - `parcelas`
 - `contas`
 - `subcontas`
+- `passwordResetCodes`
 
 Veja detalhes em [database.md](database.md).
 
-## 9. Teste local
+## 12. Teste local
 
 Com `.env.local` configurado:
 
@@ -125,9 +240,15 @@ Com `.env.local` configurado:
 npm run dev
 ```
 
-Se as variaveis estiverem ausentes ou com placeholders, o app entra em modo demo local.
+Se as variaveis estiverem ausentes ou com placeholders, a aplicacao nao inicializa e mostra o erro:
 
-## 10. Checklist de seguranca
+```txt
+Firebase nao configurado corretamente
+```
+
+Nao existe fallback local de dados. Todos os dados devem vir do Firebase real.
+
+## 13. Checklist de seguranca
 
 - Authentication email/senha ativo
 - Firestore em modo producao
@@ -135,4 +256,9 @@ Se as variaveis estiverem ausentes ou com placeholders, o app entra em modo demo
 - Primeiro admin criado
 - `.env.local` fora do Git
 - Clientes com `status = active` para acessar
+- Cliente novo troca senha temporaria no primeiro login
 - Clientes pendentes ou bloqueados testados
+- Functions publicadas
+- SMTP configurado somente no ambiente das Functions
+- `PASSWORD_RESET_HASH_SECRET` forte e fora do frontend
+- Collection `passwordResetCodes` bloqueada nas regras

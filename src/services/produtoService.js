@@ -1,5 +1,6 @@
 import { byField, createDocument, listDocuments, updateDocument } from './firestoreService';
 import { filterByScope, getTargetUserId, requireOwnerId } from './accessScope';
+import { getContas, getSubcontas } from './planoContasService';
 
 const COLLECTION = 'produtos';
 
@@ -34,6 +35,10 @@ export function normalizeProduto(product) {
     categoria: normalizeText(product.categoria),
     subcategoria: normalizeText(product.subcategoria),
     unidadeMedida: normalizeText(product.unidadeMedida),
+    contaPadraoId: normalizeText(product.contaPadraoId),
+    contaPadraoNome: normalizeText(product.contaPadraoNome),
+    subcontaPadraoId: normalizeText(product.subcontaPadraoId),
+    subcontaPadraoNome: normalizeText(product.subcontaPadraoNome),
     controlaEstoque: Boolean(product.controlaEstoque),
     estoqueAtual,
     quantidadeAtual: estoqueAtual,
@@ -64,6 +69,10 @@ function sanitizeProduto(payload, { forCreate = false, ownerId = '' } = {}) {
     categoria: normalizeText(payload.categoria),
     subcategoria: normalizeText(payload.subcategoria),
     unidadeMedida: normalizeText(payload.unidadeMedida),
+    contaPadraoId: normalizeText(payload.contaPadraoId),
+    contaPadraoNome: normalizeText(payload.contaPadraoNome),
+    subcontaPadraoId: normalizeText(payload.subcontaPadraoId),
+    subcontaPadraoNome: normalizeText(payload.subcontaPadraoNome),
     controlaEstoque: Boolean(payload.controlaEstoque),
     estoqueAtual,
     ativo: payload.ativo !== false,
@@ -74,6 +83,50 @@ function sanitizeProduto(payload, { forCreate = false, ownerId = '' } = {}) {
   }
 
   return data;
+}
+
+async function validateClassificacaoPadrao(data, scope = {}, ownerId = '') {
+  if (!data.contaPadraoId) {
+    if (data.subcontaPadraoId) {
+      throw new Error('Selecione uma conta padrao antes da subconta.');
+    }
+
+    return {
+      ...data,
+      contaPadraoNome: '',
+      subcontaPadraoId: '',
+      subcontaPadraoNome: '',
+    };
+  }
+
+  const scoped = { ...scope, targetUserId: ownerId };
+  const contas = await getContas(scoped);
+  const conta = contas.find((item) => item.id === data.contaPadraoId);
+
+  if (!conta) {
+    throw new Error('Conta padrao nao encontrada para este usuario.');
+  }
+
+  if (!data.subcontaPadraoId) {
+    return {
+      ...data,
+      contaPadraoNome: conta.nome,
+      subcontaPadraoNome: '',
+    };
+  }
+
+  const subcontas = await getSubcontas(scoped, conta.id);
+  const subconta = subcontas.find((item) => item.id === data.subcontaPadraoId);
+
+  if (!subconta) {
+    throw new Error('Subconta padrao nao pertence a conta selecionada.');
+  }
+
+  return {
+    ...data,
+    contaPadraoNome: conta.nome,
+    subcontaPadraoNome: subconta.nome,
+  };
 }
 
 async function listProdutosRaw(scope = {}) {
@@ -113,7 +166,7 @@ export async function validateCodigoUnico(codigo, scope = {}, ignoreId = null) {
 
 export async function createProduto(payload, scope = {}) {
   const ownerId = requireOwnerId(scope);
-  const data = sanitizeProduto(payload, { forCreate: true, ownerId });
+  const data = await validateClassificacaoPadrao(sanitizeProduto(payload, { forCreate: true, ownerId }), scope, ownerId);
   await validateCodigoUnico(data.codigo, { ...scope, targetUserId: ownerId });
 
   return createDocument(COLLECTION, data);
@@ -121,7 +174,7 @@ export async function createProduto(payload, scope = {}) {
 
 export async function updateProduto(id, payload, scope = {}) {
   const ownerId = payload.userId || getTargetUserId(scope);
-  const data = sanitizeProduto(payload, { ownerId });
+  const data = await validateClassificacaoPadrao(sanitizeProduto(payload, { ownerId }), scope, ownerId);
   await validateCodigoUnico(data.codigo, { ...scope, targetUserId: ownerId }, id);
 
   return updateDocument(COLLECTION, id, data);

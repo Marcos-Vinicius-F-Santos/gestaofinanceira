@@ -10,21 +10,33 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
+const requiredFields = [
+  'apiKey',
+  'authDomain',
+  'projectId',
+  'storageBucket',
+  'messagingSenderId',
+  'appId',
+  'measurementId',
+];
 const placeholderPattern = /^(your-|your_|seu-|sua-)/i;
 const missingFirebaseFields = requiredFields.filter((field) => {
   const value = firebaseConfig[field];
   return !value || placeholderPattern.test(value);
 });
 
-export const isFirebaseConfigured = missingFirebaseFields.length === 0;
-export const firebaseConfigMissingFields = missingFirebaseFields;
+if (missingFirebaseFields.length > 0) {
+  const message = 'Firebase n\u00e3o configurado corretamente';
+  console.error(message);
+  throw new Error(message);
+}
 
-const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
+export const app = initializeApp(firebaseConfig);
 
-export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
-export const functions = app ? getFunctions(app) : null;
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const functions = getFunctions(app, 'southamerica-east1');
 export default app;

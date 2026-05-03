@@ -23,6 +23,14 @@ const initialFilters = {
   status: '',
 };
 
+function getContaName(movement) {
+  return movement.conta || movement.contaNome || '';
+}
+
+function getSubcontaName(movement) {
+  return movement.subConta || movement.subcontaNome || '';
+}
+
 export default function HistoricoPage() {
   const scope = useDataScope();
   const [movements, setMovements] = useState([]);
@@ -95,8 +103,8 @@ export default function HistoricoPage() {
       const matchesTipo = !filters.tipo || movement.tipo === filters.tipo;
       const matchesStart = !filters.dataInicial || movement.dataReferencia >= filters.dataInicial;
       const matchesEnd = !filters.dataFinal || movement.dataReferencia <= filters.dataFinal;
-      const matchesConta = !filters.conta || String(movement.conta || '').toLowerCase().includes(filters.conta.toLowerCase());
-      const matchesSubConta = !filters.subConta || String(movement.subConta || '').toLowerCase().includes(filters.subConta.toLowerCase());
+      const matchesConta = !filters.conta || String(getContaName(movement)).toLowerCase().includes(filters.conta.toLowerCase());
+      const matchesSubConta = !filters.subConta || String(getSubcontaName(movement)).toLowerCase().includes(filters.subConta.toLowerCase());
       const matchesStatus = !filters.status || movement.financeiro.status === filters.status;
 
       return matchesProduto && matchesFornecedor && matchesTipo && matchesStart && matchesEnd && matchesConta && matchesSubConta && matchesStatus;
@@ -118,8 +126,8 @@ export default function HistoricoPage() {
         quantidade: movement.quantidade,
         valorTotal: movement.valorTotal,
         valorUnitario: movement.valorUnitario,
-        conta: movement.conta,
-        subConta: movement.subConta,
+        conta: getContaName(movement),
+        subConta: getSubcontaName(movement),
         statusFinanceiro: movement.financeiro.status,
         vencimento: movement.financeiro.vencimento,
         observacao: movement.observacao,
@@ -213,8 +221,8 @@ export default function HistoricoPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{movement.fornecedorNome || '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3.5"><StatusBadge value={movement.tipo} /></td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{movement.conta || '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{movement.subConta || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getContaName(movement) || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{getSubcontaName(movement) || '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3.5"><StatusBadge value={movement.financeiro.status} /></td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-600">{formatDate(movement.financeiro.vencimento)}</td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-bold text-slate-800">{movement.quantidade}</td>

@@ -1,27 +1,19 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from './firebase';
-import {
-  mockGetUserProfile,
-  mockLogin,
-  mockLogout,
-  mockRegisterUser,
-  mockSubscribeAuthState,
-} from './mockService';
+import { auth, db } from './firebase';
 
 export async function login(email, password) {
-  const result = !isFirebaseConfigured
-    ? await mockLogin(email, password)
-    : await signInWithEmailAndPassword(auth, email, password).then(async (credential) => ({
-        user: credential.user,
-        profile: await getUserProfile(credential.user.uid),
-      }));
-  const { user, profile } = result;
+  const credential = await signInWithEmailAndPassword(auth, email, password);
+  const user = credential.user;
+  const profile = await getUserProfile(user.uid);
 
   if (!profile) {
     await logout();
@@ -36,18 +28,12 @@ export async function login(email, password) {
     throw new Error('Seu acesso ainda nao foi liberado pelo administrador.');
   }
 
-  if (isFirebaseConfigured) {
-    await updateDoc(doc(db, 'users', user.uid), { lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() });
-  }
+  await updateDoc(doc(db, 'users', user.uid), { lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() });
 
   return { user, profile };
 }
 
 export async function registerUser({ email, password, name, role = 'client' }) {
-  if (!isFirebaseConfigured) {
-    return mockRegisterUser({ email, password, name, role });
-  }
-
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   const userRef = doc(db, 'users', credential.user.uid);
   const payload = {
@@ -58,29 +44,55 @@ export async function registerUser({ email, password, name, role = 'client' }) {
     role,
     status: 'active',
     ativo: true,
+    mustChangePassword: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    firstLoginAt: null,
     lastLoginAt: null,
+    passwordChangedAt: null,
   };
 
   await setDoc(userRef, payload);
   return payload;
 }
 
-export function logout() {
-  if (!isFirebaseConfigured) {
-    return mockLogout();
+export async function changePassword({ currentPassword, newPassword }) {
+  if (!currentPassword) throw new Error('Informe a senha atual.');
+  if (!newPassword) throw new Error('Informe a nova senha.');
+  if (newPassword.length < 8) throw new Error('A nova senha deve ter no minimo 8 caracteres.');
+  if (currentPassword === newPassword) throw new Error('A nova senha deve ser diferente da senha atual.');
+
+  const currentUser = auth.currentUser;
+
+  if (!currentUser?.email) {
+    throw new Error('Sessao expirada. Faca login novamente.');
   }
 
+  const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+  await reauthenticateWithCredential(currentUser, credential);
+  await updatePassword(currentUser, newPassword);
+
+  const profile = await getUserProfile(currentUser.uid);
+  const payload = {
+    mustChangePassword: false,
+    passwordChangedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (!profile?.firstLoginAt) {
+    payload.firstLoginAt = serverTimestamp();
+  }
+
+  await updateDoc(doc(db, 'users', currentUser.uid), payload);
+  return getUserProfile(currentUser.uid);
+}
+
+export function logout() {
   return signOut(auth);
 }
 
 export async function getUserProfile(uid) {
   if (!uid) return null;
-
-  if (!isFirebaseConfigured) {
-    return mockGetUserProfile(uid);
-  }
 
   const snapshot = await getDoc(doc(db, 'users', uid));
   if (!snapshot.exists()) return null;
@@ -90,13 +102,10 @@ export async function getUserProfile(uid) {
     ...data,
     role: data.role === 'user' ? 'client' : data.role,
     status: data.status || (data.ativo === false ? 'blocked' : 'active'),
+    mustChangePassword: Boolean(data.mustChangePassword),
   };
 }
 
 export function subscribeAuthState(callback) {
-  if (!isFirebaseConfigured) {
-    return mockSubscribeAuthState(callback);
-  }
-
   return onAuthStateChanged(auth, callback);
 }

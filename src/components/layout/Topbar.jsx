@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAdminClient } from '../../contexts/AdminClientContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { isFirebaseConfigured } from '../../services/firebase';
 
 export default function Topbar() {
   const { profile, role } = useAuth();
@@ -21,11 +20,6 @@ export default function Topbar() {
           <p className="text-xs text-slate-500">
             {isViewingClient ? `Visualizando cliente: ${selectedClient?.nome || selectedClient?.email}` : 'Produtos, fornecedores, movimentacoes e parcelas'}
           </p>
-          {!isFirebaseConfigured ? (
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-blue-700">
-              Demo
-            </span>
-          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">

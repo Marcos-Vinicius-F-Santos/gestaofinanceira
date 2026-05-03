@@ -7,12 +7,14 @@ import LoadingState from '../components/shared/LoadingState';
 import Modal from '../components/shared/Modal';
 import PageHeader from '../components/shared/PageHeader';
 import { useDataScope } from '../hooks/useDataScope';
+import { getContas } from '../services/planoContasService';
 import { createProduto, deleteProduto, getProdutos, updateProduto } from '../services/produtoService';
 import { exportToCSV } from '../utils/csv';
 
 export default function ProdutosPage() {
   const scope = useDataScope();
   const [products, setProducts] = useState([]);
+  const [contas, setContas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -29,7 +31,9 @@ export default function ProdutosPage() {
     setActionError('');
 
     try {
-      setProducts(await getProdutos(scope));
+      const [loadedProducts, loadedContas] = await Promise.all([getProdutos(scope), getContas(scope)]);
+      setProducts(loadedProducts);
+      setContas(loadedContas.filter((conta) => conta.ativo));
     } catch (err) {
       setActionError(err.message || 'Nao foi possivel carregar produtos.');
     } finally {
@@ -89,9 +93,11 @@ export default function ProdutosPage() {
         unidadeMedida: product.unidadeMedida,
         controlaEstoque: product.controlaEstoque ? 'sim' : 'nao',
         estoqueAtual: product.estoqueAtual,
+        contaPadrao: product.contaPadraoNome || '',
+        subcontaPadrao: product.subcontaPadraoNome || '',
         ativo: product.ativo ? 'sim' : 'nao',
       })),
-      ['codigo', 'nome', 'categoria', 'subcategoria', 'unidadeMedida', 'controlaEstoque', 'estoqueAtual', 'ativo'],
+      ['codigo', 'nome', 'categoria', 'subcategoria', 'unidadeMedida', 'controlaEstoque', 'estoqueAtual', 'contaPadrao', 'subcontaPadrao', 'ativo'],
     );
   };
 
@@ -136,6 +142,8 @@ export default function ProdutosPage() {
         >
           <ProductForm
             currentProduct={currentProduct}
+            contas={contas}
+            scope={scope}
             onSubmit={handleSubmit}
             onCancel={() => {
               setModalOpen(false);

@@ -1,5 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { getUserProfile, login as loginService, logout as logoutService, subscribeAuthState } from '../services/authService';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  changePassword as changePasswordService,
+  getUserProfile,
+  login as loginService,
+  logout as logoutService,
+  subscribeAuthState,
+} from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -44,6 +50,19 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!user?.uid) return null;
+    const nextProfile = await getUserProfile(user.uid);
+    setProfile(nextProfile);
+    return nextProfile;
+  }, [user?.uid]);
+
+  const changePassword = useCallback(async (payload) => {
+    const nextProfile = await changePasswordService(payload);
+    setProfile(nextProfile);
+    return nextProfile;
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -52,10 +71,13 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(user),
       isAdmin: profile?.role === 'admin',
+      mustChangePassword: Boolean(profile?.mustChangePassword),
       login: loginService,
       logout: logoutService,
+      refreshProfile,
+      changePassword,
     }),
-    [user, profile, loading],
+    [changePassword, refreshProfile, user, profile, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -72,10 +94,15 @@ export function useAuth() {
       loading: false,
       isAuthenticated: false,
       isAdmin: false,
+      mustChangePassword: false,
       login: async () => {
         throw new Error('Autenticacao indisponivel.');
       },
       logout: async () => {},
+      refreshProfile: async () => null,
+      changePassword: async () => {
+        throw new Error('Autenticacao indisponivel.');
+      },
     };
   }
 

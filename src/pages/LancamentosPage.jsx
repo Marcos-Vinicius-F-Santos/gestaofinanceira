@@ -7,15 +7,22 @@ import Alert from '../components/shared/Alert';
 import LoadingState from '../components/shared/LoadingState';
 import PageHeader from '../components/shared/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataScope } from '../hooks/useDataScope';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { createLancamento, deleteLancamento, updateLancamento } from '../services/lancamentoService';
+import { byField } from '../services/firestoreService';
 import { exportToCSV } from '../utils/csv';
 import { normalizeLancamento } from '../utils/businessRules';
 import { applyLancamentoFilters, emptyFilters, sortByDateDesc } from '../utils/filters';
 
 export default function LancamentosPage() {
   const { isAdmin } = useAuth();
-  const { items, loading, error } = useFirestoreCollection('lancamentos');
+  const scope = useDataScope();
+  const constraints = useMemo(
+    () => (scope.effectiveUserId ? [byField('userId', '==', scope.effectiveUserId)] : []),
+    [scope.effectiveUserId],
+  );
+  const { items, loading, error } = useFirestoreCollection('lancamentos', constraints);
   const [filters, setFilters] = useState(emptyFilters);
   const [currentItem, setCurrentItem] = useState(null);
   const [feedback, setFeedback] = useState('');
@@ -33,7 +40,7 @@ export default function LancamentosPage() {
         setCurrentItem(null);
         setFeedback('Lancamento atualizado com sucesso.');
       } else {
-        await createLancamento(payload);
+        await createLancamento(payload, scope);
         setFeedback('Lancamento criado com sucesso.');
       }
     } catch (err) {

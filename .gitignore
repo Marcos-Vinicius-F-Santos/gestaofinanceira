@@ -4,6 +4,7 @@ dist/
 .env
 .env.*
 !.env.example
+!functions/.env.example
 
 .DS_Store
 Thumbs.db

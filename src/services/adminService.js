@@ -1,9 +1,8 @@
-import { httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { createDocument, listDocuments, updateDocument } from './firestoreService';
-import { functions, isFirebaseConfigured } from './firebase';
+import { app } from './firebase';
 import { getMovimentacoes } from './movimentacaoService';
 import { getParcelas, getStatusContaPagar, getStatusContaReceber } from './parcelaService';
-import { mockRegisterUser } from './mockService';
 
 function normalizeClient(user) {
   return {
@@ -25,28 +24,49 @@ export async function getClients() {
   return users.filter((user) => user.role === 'client');
 }
 
-export async function createClientUser({ nome, email, password, status = 'pending', createdByAdminId = '' }) {
+function mapCreateClientError(error) {
+  if (error.code === 'functions/permission-denied' || error.code === 'permission-denied') {
+    return 'Voce nao tem permissao para criar clientes.';
+  }
+
+  if (error.code === 'functions/unauthenticated' || error.code === 'unauthenticated') {
+    return 'Sua sessao expirou. Faca login novamente.';
+  }
+
+  if (error.code === 'functions/already-exists' || error.code === 'already-exists') {
+    return 'Este email ja esta cadastrado.';
+  }
+
+  if (error.code === 'functions/invalid-argument' || error.code === 'invalid-argument') {
+    return error.message || 'Confira os dados do cliente.';
+  }
+
+  return 'Nao foi possivel criar o cliente agora.';
+}
+
+export async function createClientUserCallable({ nome, email, password, status = 'pending', createdByAdminId = '' }) {
   if (!nome?.trim()) throw new Error('Informe o nome do cliente.');
   if (!email?.trim()) throw new Error('Informe o email do cliente.');
   if (!password?.trim()) throw new Error('Informe a senha temporaria.');
 
-  if (!isFirebaseConfigured) {
-    return mockRegisterUser({
+  try {
+    const functions = getFunctions(app, 'southamerica-east1');
+    const callable = httpsCallable(functions, 'createClientUser');
+    const result = await callable({
+      nome,
       email,
       password,
-      name: nome,
-      role: 'client',
       status,
       createdByAdminId,
     });
-  }
 
-  // Esta callable deve ser publicada como Cloud Function usando Admin SDK.
-  // Ela cria o usuario no Firebase Auth e grava users/{uid} com os campos do cliente.
-  const callable = httpsCallable(functions, 'createClientUser');
-  const result = await callable({ nome, email, password, status, createdByAdminId });
-  return result.data;
+    return result.data;
+  } catch (error) {
+    throw new Error(mapCreateClientError(error));
+  }
 }
+
+export const createClientUser = createClientUserCallable;
 
 async function findUserDocumentId(uid) {
   const users = await listDocuments('users');
@@ -113,5 +133,4 @@ export async function getMacroData(adminScope = {}) {
   };
 }
 
-export const getClientData = async () => ({ produtos: [], fornecedores: [], movimentacoes: [], parcelas: [] });
 export const create = createDocument;

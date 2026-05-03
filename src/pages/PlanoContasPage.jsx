@@ -1,5 +1,6 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import PlanoContasImportModal from '../components/finance/PlanoContasImportModal';
 import Alert from '../components/shared/Alert';
 import Button from '../components/shared/Button';
 import EmptyState from '../components/shared/EmptyState';
@@ -33,10 +34,11 @@ export default function PlanoContasPage() {
   const [form, setForm] = useState(emptyConta);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (preferredContaId = selectedContaId) => {
     if (!scope.effectiveUserId) {
       setLoading(false);
       return;
@@ -46,8 +48,8 @@ export default function PlanoContasPage() {
 
     try {
       const loadedContas = await getContas(scope);
-      const selectedExists = loadedContas.some((conta) => conta.id === selectedContaId);
-      const nextSelectedContaId = selectedExists ? selectedContaId : '';
+      const selectedExists = loadedContas.some((conta) => conta.id === preferredContaId);
+      const nextSelectedContaId = selectedExists ? preferredContaId : '';
       const loadedSubcontas = nextSelectedContaId ? await getSubcontas(scope, nextSelectedContaId) : [];
 
       setContas(loadedContas);
@@ -116,7 +118,7 @@ export default function PlanoContasPage() {
         await updateSubconta(currentItem.id, { nome: form.nome, ativo: form.ativo });
         setFeedback('Subconta atualizada.');
       } else {
-        await createSubconta({ ...form, contaId: selectedContaId }, scope);
+        await createSubconta({ ...form, contaId: selectedContaId, contaNome: selectedConta?.nome || '' }, scope);
         setFeedback('Subconta criada.');
       }
 
@@ -126,6 +128,19 @@ export default function PlanoContasPage() {
       setActionError(err.message || 'Nao foi possivel salvar.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleImported = async (result) => {
+    const message = `Importacao concluida: ${result.subcontasNovas} subconta(s) nova(s), ${result.contasNovas} conta(s) nova(s).`;
+    setFeedback(message);
+    setActionError('');
+
+    if (result.firstContaId) {
+      setSelectedContaId(result.firstContaId);
+      await loadData(result.firstContaId);
+    } else {
+      await loadData();
     }
   };
 
@@ -161,10 +176,16 @@ export default function PlanoContasPage() {
         title="Plano de Contas"
         description="Classifique receitas e despesas com contas e subcontas simples."
         action={
-          <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => openContaModal()}>
-            <Plus className="h-4 w-4" />
-            Nova Conta
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setShowImportModal(true)}>
+              <Upload className="h-4 w-4" />
+              Importar Plano de Contas
+            </button>
+            <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => openContaModal()}>
+              <Plus className="h-4 w-4" />
+              Nova Conta
+            </button>
+          </div>
         }
       />
       <Alert variant="error">{actionError}</Alert>
@@ -299,6 +320,14 @@ export default function PlanoContasPage() {
             </div>
           </form>
         </Modal>
+      ) : null}
+
+      {showImportModal ? (
+        <PlanoContasImportModal
+          scope={scope}
+          onClose={() => setShowImportModal(false)}
+          onImported={handleImported}
+        />
       ) : null}
     </div>
   );

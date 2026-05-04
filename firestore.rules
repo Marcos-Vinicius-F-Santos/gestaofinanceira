@@ -72,10 +72,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /passwordResetCodes/{documentId} {
-      allow read, write: if false;
-    }
-
     match /produtos/{documentId} {
       allow read: if isAdmin() || ownsExistingResource();
       allow create: if isAdmin() || ownsNewResource();

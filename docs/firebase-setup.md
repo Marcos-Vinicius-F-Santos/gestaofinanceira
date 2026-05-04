@@ -1,6 +1,6 @@
 # Configuracao Firebase
 
-Este guia mostra como configurar Firebase Authentication, Firestore, Cloud Functions, email transacional e variaveis de ambiente para o Gestao Pro.
+Este guia mostra como configurar Firebase Authentication, Firestore, Cloud Functions e variaveis de ambiente para o Gestao Pro.
 
 ## 1. Criar projeto Firebase
 
@@ -42,7 +42,7 @@ Resumo:
 - admin acessa documentos de todos os clientes
 - cliente pendente ou bloqueado nao deve operar dados
 - cliente pode atualizar no proprio `users/{uid}` apenas metadados de login e troca de senha
-- `passwordResetCodes` nao permite acesso direto pelo frontend
+- recuperacao de senha usa o link nativo do Firebase Auth
 - nenhuma collection deve usar `allow read, write: if true`
 
 ## 5. Adicionar app web
@@ -136,7 +136,7 @@ Quando `mustChangePassword = true`:
 
 Clientes `pending` ou `blocked` nao conseguem chegar a tela de troca de senha.
 
-## 9. Recuperacao de senha por codigo
+## 9. Recuperacao de senha
 
 O app possui a rota:
 
@@ -147,28 +147,20 @@ O app possui a rota:
 Fluxo:
 
 1. Usuario informa email.
-2. Frontend chama `requestPasswordResetCode(email)`.
-3. Cloud Function busca o usuario pelo email usando Admin SDK.
-4. Se existir, gera codigo de 6 digitos.
-5. Salva apenas `codeHash` em `passwordResetCodes`.
-6. Define expiracao de 10 minutos e tentativas em zero.
-7. Envia o codigo por email.
-8. Usuario informa codigo, nova senha e confirmacao.
-9. Frontend chama `verifyPasswordResetCode(email, code, newPassword)`.
-10. Cloud Function valida codigo, expiracao e tentativas.
-11. Senha e alterada com `admin.auth().updateUser()`.
-12. Codigo e marcado como usado.
+2. Frontend chama `sendPasswordResetEmail(auth, email)`.
+3. Firebase Auth envia o link nativo de redefinicao.
+4. Usuario conclui a troca de senha pelo fluxo seguro do Firebase.
 
 Seguranca:
 
 - resposta da solicitacao e generica para nao revelar se o email existe.
-- codigo puro nao e salvo no banco.
-- limite de 5 tentativas.
-- reenvio bloqueado por 60 segundos.
-- senha nunca passa por Firestore.
-- credenciais de email ficam somente nas Cloud Functions.
+- nao existe codigo numerico nem collection temporaria para o frontend.
+- nao ha SMTP proprio nem credenciais de email no projeto.
+- o envio e a troca de senha ficam sob responsabilidade do Firebase Auth.
 
 ## 10. Configurar Cloud Functions
+
+As Functions continuam sendo usadas para operacoes administrativas, como criacao segura de clientes.
 
 Instale dependencias das Functions:
 
@@ -177,35 +169,7 @@ cd functions
 npm install
 ```
 
-Copie o exemplo de ambiente:
-
-```bash
-cp .env.example .env
-```
-
-Preencha:
-
-```env
-EMAIL_HOST=
-EMAIL_PORT=587
-EMAIL_USER=
-EMAIL_PASS=
-EMAIL_FROM=
-EMAIL_SECURE=false
-PASSWORD_RESET_HASH_SECRET=
-FUNCTIONS_REGION=southamerica-east1
-```
-
-Variaveis:
-
-- `EMAIL_HOST`: servidor SMTP.
-- `EMAIL_PORT`: porta SMTP, normalmente `587` ou `465`.
-- `EMAIL_USER`: usuario SMTP.
-- `EMAIL_PASS`: senha SMTP.
-- `EMAIL_FROM`: remetente dos emails.
-- `EMAIL_SECURE`: `true` para SMTP seguro direto, comum na porta `465`.
-- `PASSWORD_RESET_HASH_SECRET`: segredo forte para HMAC do codigo.
-- `FUNCTIONS_REGION`: regiao das Functions.
+Atualmente nao ha variaveis SMTP obrigatorias para Functions. A recuperacao de senha usa o Firebase Auth nativo.
 
 Publique:
 
@@ -216,8 +180,7 @@ firebase deploy --only functions,firestore:rules
 Functions criadas:
 
 - `createClientUser`
-- `requestPasswordResetCode`
-- `verifyPasswordResetCode`
+- `updateClientStatus`
 
 ## 11. Collections esperadas
 
@@ -228,7 +191,6 @@ Functions criadas:
 - `parcelas`
 - `contas`
 - `subcontas`
-- `passwordResetCodes`
 
 Veja detalhes em [database.md](database.md).
 
@@ -259,6 +221,4 @@ Nao existe fallback local de dados. Todos os dados devem vir do Firebase real.
 - Cliente novo troca senha temporaria no primeiro login
 - Clientes pendentes ou bloqueados testados
 - Functions publicadas
-- SMTP configurado somente no ambiente das Functions
-- `PASSWORD_RESET_HASH_SECRET` forte e fora do frontend
-- Collection `passwordResetCodes` bloqueada nas regras
+- Recuperacao de senha nativa do Firebase Auth testada

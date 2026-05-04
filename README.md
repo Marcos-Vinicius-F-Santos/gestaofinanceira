@@ -79,7 +79,7 @@ Depois:
 2. Ative Authentication com email/senha.
 3. Crie o Firestore.
 4. Publique as regras em `firestore.rules`.
-5. Publique as Functions para criacao de cliente e recuperacao de senha.
+5. Publique as Functions para criacao e administracao de clientes.
 
 Se alguma variavel estiver ausente, o app mostra no console:
 
@@ -95,8 +95,8 @@ Guia completo: [docs/firebase-setup.md](docs/firebase-setup.md).
 
 ## Recuperacao de senha
 
-O frontend chama as callables `requestPasswordResetCode` e `verifyPasswordResetCode`.
-O codigo de 6 digitos e gerado, hasheado, armazenado temporariamente e enviado por email apenas no backend.
+O frontend usa `sendPasswordResetEmail(auth, email)`, do Firebase Auth.
+Nao ha codigo numerico, Cloud Function ou SMTP proprio para esse fluxo.
 
 ## Deploy na Vercel
 

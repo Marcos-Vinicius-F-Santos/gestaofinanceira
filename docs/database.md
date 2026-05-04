@@ -8,7 +8,7 @@ Este documento descreve as collections usadas no Cloud Firestore. Campos `create
 - Cliente (`role = client`) so pode ler e escrever documentos onde `userId == request.auth.uid`.
 - Admin (`role = admin`) pode ler e escrever dados de clientes.
 - Usuario com `status = pending` ou `blocked` nao acessa o sistema como cliente.
-- `passwordResetCodes` e acessada apenas por Cloud Functions com Admin SDK.
+- Recuperacao de senha usa o fluxo nativo do Firebase Auth.
 
 ## users
 
@@ -44,40 +44,6 @@ Regras:
 Relacionamentos:
 
 - `users.uid` e usado como `userId` nas demais collections.
-
-## passwordResetCodes
-
-Armazena codigos temporarios de recuperacao de senha. A collection e operacional e nao deve ser acessada diretamente pelo frontend.
-
-Campos:
-
-| Campo | Tipo | Obrigatorio | Descricao |
-| --- | --- | --- | --- |
-| `id` | string | sim | ID hashado derivado do email normalizado |
-| `email` | string | sim | Email normalizado |
-| `codeHash` | string | sim | Hash HMAC do codigo de 6 digitos |
-| `expiresAt` | timestamp | sim | Expiracao em 10 minutos |
-| `expiresAtMillis` | number | sim | Expiracao em milissegundos para validacao |
-| `used` | boolean | sim | Indica se o codigo ja foi usado |
-| `attempts` | number | sim | Tentativas de validacao |
-| `createdAt` | timestamp | sim | Criacao |
-| `createdAtMillis` | number | sim | Criacao em milissegundos para bloqueio de reenvio |
-| `usedAt` | timestamp | nao | Momento de uso |
-| `updatedAt` | timestamp | nao | Ultima alteracao |
-
-Regras:
-
-- codigo puro nunca deve ser salvo.
-- codigo expira em 10 minutos.
-- limite de 5 tentativas.
-- reenvio e bloqueado por 60 segundos no backend e no frontend.
-- documento e marcado como `used = true` apos sucesso.
-- Firestore rules bloqueiam leitura/escrita pelo app cliente.
-
-Relacionamentos:
-
-- O email e usado para localizar o usuario no Firebase Auth via Admin SDK.
-- Apos sucesso, `users/{uid}` recebe `mustChangePassword = false` e `passwordChangedAt`.
 
 ## produtos
 

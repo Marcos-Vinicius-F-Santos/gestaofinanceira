@@ -18,7 +18,7 @@ Principais funcionalidades:
 - historico de movimentacoes
 - historico de preco por produto
 - exportacao CSV
-- recuperacao de senha por codigo enviado por email
+- recuperacao de senha por link nativo do Firebase Auth
 
 ## Estrutura do sistema
 
@@ -36,7 +36,7 @@ Principais funcionalidades:
 
 - Firebase Authentication para login
 - Cloud Firestore para persistencia
-- Firebase Functions para criacao segura de usuarios clientes e recuperacao de senha
+- Firebase Functions para criacao segura de usuarios clientes
 - Regras Firestore para isolamento por `userId` e permissao de admin
 
 ### Autenticacao
@@ -56,20 +56,16 @@ Fluxo:
 Recuperacao de senha:
 
 1. Usuario clica em "Esqueci minha senha".
-2. App chama a callable `requestPasswordResetCode(email)`.
-3. A Cloud Function gera um codigo numerico de 6 digitos, salva apenas o hash em `passwordResetCodes` e envia o codigo por email.
-4. Usuario informa codigo, nova senha e confirmacao.
-5. App chama `verifyPasswordResetCode(email, code, newPassword)`.
-6. A Cloud Function valida expiracao, tentativas e hash antes de alterar a senha via Firebase Admin SDK.
-7. Apos sucesso, `mustChangePassword = false` e `passwordChangedAt` e atualizado em `users/{uid}`.
+2. App chama `sendPasswordResetEmail(auth, email)`.
+3. Firebase Auth envia o link nativo de redefinicao de senha.
+4. Usuario redefine a senha pelo fluxo seguro do Firebase.
 
 Regras:
 
 - a tela nunca revela se o email existe
-- codigo expira em 10 minutos
-- limite de 5 tentativas
-- codigo puro nao e salvo no Firestore
-- senha nao e alterada pelo frontend
+- nao existe codigo numerico salvo no Firestore
+- nao ha envio SMTP proprio nem Cloud Function para recuperar senha
+- a redefinicao usa o provedor nativo do Firebase Auth
 
 Troca obrigatoria de senha:
 
@@ -91,7 +87,6 @@ O Firestore armazena as collections:
 - `parcelas`
 - `contas`
 - `subcontas`
-- `passwordResetCodes`
 
 Todos os documentos operacionais possuem `userId`, exceto o proprio documento de usuario em `users`.
 
@@ -336,18 +331,9 @@ Regras:
 
 Permite redefinir a senha quando o usuario esquece o acesso.
 
-Campos temporarios em `passwordResetCodes`:
-
-- `email`
-- `codeHash`
-- `expiresAt`
-- `used`
-- `attempts`
-- `createdAt`
-
 Regras:
 
-- collection nao e lida nem escrita diretamente pelo frontend
-- Cloud Functions usam Firebase Admin SDK
-- credenciais SMTP ficam somente no ambiente das Functions
+- usa `sendPasswordResetEmail(auth, email)`
+- nao depende de Cloud Function
+- nao depende de SMTP externo
 - resposta da solicitacao e generica para nao revelar cadastro de email

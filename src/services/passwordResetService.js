@@ -1,5 +1,7 @@
-import { httpsCallable } from 'firebase/functions';
-import { functions } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from './firebase';
+
+const functions = getFunctions(app, 'southamerica-east1');
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
